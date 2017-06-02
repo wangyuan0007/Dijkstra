@@ -796,7 +796,7 @@ deque<deque<uint> > NodePoint::SearchMinPath(uint minpointnum,uint mindistance)
     Point2PointStartIndex.push_back(Point2Point.size());
     for(uint i = 0; i < endPoint.size(); i++)
     {
-        PointPath = SearchMinPointNumPath(endPoint[i],endPoint,Point2PointDistance,endPoint.size()/2,true);
+        PointPath = SearchMinPointNumPath(endPoint[i],endPoint,Point2PointDistance,endPoint.size()/2>10?10:endPoint.size()/2,true);
        // if(PointPath.size() < 2)
          //   PointPath = SearchMinPointNumPath(endPoint[i],endPoint,Point2PointDistance,endPoint.size()/2 + 1,true);
         Point2Point.insert(Point2Point.end(),PointPath.begin(),PointPath.end());
@@ -815,6 +815,8 @@ deque<deque<uint> > NodePoint::SearchMinPath(uint minpointnum,uint mindistance)
     uint LastPoint;
     uint HasSearchNum;
     uint MustPassLineNum = constraint.MustpassLine.size();
+    uint MinPointNum = 1e7;
+	uint MaxPointNum = 0;
 
     for(uint i = 0; i < PointPathNum; i++)
     {
@@ -824,6 +826,28 @@ deque<deque<uint> > NodePoint::SearchMinPath(uint minpointnum,uint mindistance)
     for(int i = 0; i < SearchNum - 1; i ++)
     {
         PointPathNum = PointPath.size();
+        //cout<<PointPathNum<<endl;
+        if(PointPathNum > 8000)//路径过多时删除长度过长路径
+		{
+			uint meanPointNum = (MinPointNum + MaxPointNum)/2;
+			for(uint j = 0; j < PointPathNum; j++)
+			{
+				if(PointPath[j].size() > meanPointNum)
+				{
+					PointPath[j] = PointPath[0];
+					PointPath.pop_front();
+					HasSearchPoint[j] = HasSearchPoint[0];
+					HasSearchPoint.pop_front();
+					PathDistance[j] = PathDistance[0];
+					PathDistance.pop_front();
+					j--;
+					PointPathNum--;
+				}
+			}
+		}
+		MinPointNum = 1e7;
+		MaxPointNum = 0;
+		
         for(uint j = 0; j < PointPathNum; j++)//循环处理每个路径
         {
             LastPoint = PointPath[j].back();
@@ -838,39 +862,53 @@ deque<deque<uint> > NodePoint::SearchMinPath(uint minpointnum,uint mindistance)
             }
             if(PointPosition[LastPoint]->PointAttribute != MustPass)
             {
-                hasSearch = false;
-                for(uint s = 0; s < HasSearchNum; s++)
-                {
-                    if(HasSearchPoint[j][s] == LastPoint)
-                    {
-                        hasSearch = true;
-                        break;
-                    }
-                }
-                if(hasSearch)
-                    hasSearch = false;
-                else
-                {
-                    for(uint k = 0; k < MustPassLineNum ; k++)
-                    {
-                        if(LastPoint == constraint.MustpassLine[k].c)
-                        {
-                            PointPath[i].push_back(constraint.MustpassLine[k].f);
-                            PathDistance[i] = PathDistance[i] + constraint.MustpassLineDistance[k];
-                            break;
-                        }
-                        if(LastPoint == constraint.MustpassLine[k].f)
-                        {
-                            PointPath[i].push_back(constraint.MustpassLine[k].c);
-                            PathDistance[i] = PathDistance[i] + constraint.MustpassLineDistance[k];
-                            break;
-                        }
+				uint next,dist;
+				for(uint k = 0; k < MustPassLineNum ; k++)
+				{
+					if(LastPoint == constraint.MustpassLine[k].c)
+					{
+						next = constraint.MustpassLine[k].f;
+						dist = constraint.MustpassLineDistance[k];
+						//PointPath[i].push_back(constraint.MustpassLine[k].f);
+						//PathDistance[i] = PathDistance[i] + constraint.MustpassLineDistance[k];
+						break;
+					}
+					if(LastPoint == constraint.MustpassLine[k].f)
+					{
+						next = constraint.MustpassLine[k].c;
+						dist = constraint.MustpassLineDistance[k];
+						//PointPath[i].push_back(constraint.MustpassLine[k].c);
+						//PathDistance[i] = PathDistance[i] + constraint.MustpassLineDistance[k];
+						break;
+					}
 
-                    }
-                    continue;
-                }
+				}
+				hasSearch = false;
+				for(uint s = 0; s < HasSearchNum; s++)
+				{
+					if(HasSearchPoint[j][s] == next)
+					{
+						hasSearch = true;
+						break;
+					}
+				}
+				if(hasSearch)
+					hasSearch = false;
+				else
+				{
+					addPath = PointPath[j];
+					addPath.push_back(next);
+					MaxPointNum = MaxPointNum < addPath.size()?addPath.size():MaxPointNum;
+					MinPointNum = MinPointNum > addPath.size()?addPath.size():MinPointNum;
+					PointPath.push_back(addPath);
+					addPath = HasSearchPoint[j];
+					addPath.push_back(next);
+					HasSearchPoint.push_back(addPath);
+					PathDistance.push_back(PathDistance[j] + dist);
+					continue;
+				}
 
-            }
+			}
             for(int k = 0; k < SearchNum; k++)//查找最后一个点在路径中的起点位置
             {
                 if(endPoint[k] == LastPoint)
@@ -899,6 +937,8 @@ deque<deque<uint> > NodePoint::SearchMinPath(uint minpointnum,uint mindistance)
                 addPath = isSearch;
                 addPath.insert(addPath.end(),Point2Point[k].begin() + 1,Point2Point[k].end());
                 PointPath.push_back(addPath);
+                MaxPointNum = MaxPointNum < addPath.size()?addPath.size():MaxPointNum;
+				MinPointNum = MinPointNum > addPath.size()?addPath.size():MinPointNum;
                 addPath = HasSearchPoint[j];
                 addPath.push_back(Point2Point[k].back());
                 HasSearchPoint.push_back(addPath);
@@ -906,9 +946,7 @@ deque<deque<uint> > NodePoint::SearchMinPath(uint minpointnum,uint mindistance)
                 //				Point2PointDistance.push_back();
                 //HasSearchPoint.back().push_back(Point2Point[k].back());
             }
-            
-            //j--;
-//            PointPathNum--;
+
         }
         if(PointPathNum != PointPath.size())
         {
@@ -921,15 +959,19 @@ deque<deque<uint> > NodePoint::SearchMinPath(uint minpointnum,uint mindistance)
         }
         else
 		{
-			TempPoint2Point.push_back(deque<uint>());
-			TempPoint2PointStartIndex.push_back(0);
-			TempPoint2PointStartIndex.push_back(1);
-			for(uint f = 0; f < endPoint.size(); f++)
+			if(TempPoint2Point.empty())
 			{
-				TempPointPath = SearchMinPointNumPath(endPoint[f],endPoint,TempPoint2PointDistance,endPoint.size(),true);
-				TempPoint2Point.insert(TempPoint2Point.end(),TempPointPath.begin(),TempPointPath.end());
-				TempPoint2PointStartIndex.push_back(TempPoint2Point.size());
+				TempPoint2Point.push_back(deque<uint>());
+				TempPoint2PointStartIndex.push_back(0);
+				TempPoint2PointStartIndex.push_back(1);
+				for(uint f = 0; f < endPoint.size(); f++)
+				{
+					TempPointPath = SearchMinPointNumPath(endPoint[f],endPoint,TempPoint2PointDistance,endPoint.size(),true);
+					TempPoint2Point.insert(TempPoint2Point.end(),TempPointPath.begin(),TempPointPath.end());
+					TempPoint2PointStartIndex.push_back(TempPoint2Point.size());
+				}
 			}
+			
 			for(uint j = 0; j < PointPathNum; j++)
 			{
 				LastPoint = PointPath[j].back();
@@ -961,6 +1003,8 @@ deque<deque<uint> > NodePoint::SearchMinPath(uint minpointnum,uint mindistance)
 					}
 					addPath = isSearch;
 					addPath.insert(addPath.end(),TempPoint2Point[k].begin() + 1,TempPoint2Point[k].end());
+					MaxPointNum = MaxPointNum < addPath.size()?addPath.size():MaxPointNum;
+					MinPointNum = MinPointNum > addPath.size()?addPath.size():MinPointNum;
 					PointPath.push_back(addPath);
 					addPath = HasSearchPoint[j];
 					addPath.push_back(TempPoint2Point[k].back());
